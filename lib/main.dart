@@ -81,10 +81,10 @@ class _MyHomePageState extends State<MyHomePage> {
     Logger.info("initState.......");
     if (!imclient.isLogin) {
       //由于是单例，所以必须先判断是否已经初始化了
-      imclient.imIPAndPort = "ws://13.250.111.190:9922";
-      imclient.fromUid = "1001_30099";
-      imclient.token = "123";
-      imclient.deviceId = "1649303524433-44426425";
+      imclient.imIPAndPort = "ws://xxx.xxx.xxx.xxx:xxxx";
+      imclient.fromUid = "xxxxxx";
+      imclient.token = "xxxxxx";
+      imclient.deviceId = "xxxxxxxxxx";
       imclient.needACK = "1000001,5000004,8000000";
       imclient.init();
       imclient.start();
