@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'package:event_bus/event_bus.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert' as convert;
 
 import '../utils/AESEncrypt.dart';
-import '../utils/Logger.dart';
 import '../utils/TimeUtils.dart';
+import '../utils/event_bus.dart';
 import 'IMManagerSubject.dart';
 import 'MessageBody.dart';
 
@@ -15,7 +14,7 @@ import 'MessageBody.dart';
 enum StatusEnum { connect, connecting, close, closing }
 
 class IMWebsocket {
-  WebSocketChannel? channel;
+  late WebSocketChannel channel;
   StatusEnum isConnect = StatusEnum.close; //默认为未连接
   String imAddress = "";
   String fromUid = "";
@@ -25,19 +24,18 @@ class IMWebsocket {
 
 
   ///事件机制
-  EventBus? eventBus ;
+  IMEventBus? eventBus ;
 
   ///链接服务器
   Future connect() async {
     if (isConnect == StatusEnum.close) {
       isConnect = StatusEnum.connecting;
       channel = IOWebSocketChannel.connect(Uri.parse(imAddress));
-      channel?.stream.listen(_onReceive, onDone: () {
+      channel.stream.listen(_onReceive, onDone: () {
         isLogin = false;
-        eventBus?.fire(IMManagerSubject("Server closed channel.....","ERROR"));
       }, onError: (error) {
         isLogin = false;
-        eventBus?.fire(IMManagerSubject("Channel error.....","ERROR"));
+        eventBus?.emit("immessage",IMManagerSubject(error.toString(),"ERROR"));
       }, cancelOnError: true);
       isConnect = StatusEnum.connect;
       return true;
@@ -70,18 +68,22 @@ class IMWebsocket {
     try {
       data = convert.jsonDecode(message);
       isJsonFormat = true;
-    } catch (e) {}
-
+    } catch (_) {}
     if(isJsonFormat){
-       if(data["resDesc"] == "登录成功"){
-         isLogin = true;
-         eventBus?.fire(IMManagerSubject(message,"OK"));
-       }
+      if(data["resDesc"] == "登录成功"){
+        isLogin = true;
+      }else{
+        isLogin = false;
+      }
+      eventBus?.emit("immessage",IMManagerSubject(message,"OK"));
     }else{
       String decString = AESEncrypt.aesDecrypted(message,key);
-      eventBus?.fire(IMManagerSubject(decString,"OK"));
-      // Logger.info("解密后的数据：$decString");
+      eventBus?.emit("immessage",IMManagerSubject(decString,"OK"));
       data = convert.jsonDecode(decString);
+      if(data["eventId"] == "3000001"){
+        isLogin = false;
+        disconnect();
+      }
       if(ackmap[data["eventId"]] != null){
         sendMessage(createACKString(data["sTimest"]));
       }
