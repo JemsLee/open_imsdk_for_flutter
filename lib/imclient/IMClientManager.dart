@@ -38,12 +38,14 @@ class IMClientManager {
 
 
   String key = "";
-  Timer? timerPing;
-  Timer? timerLostMessage;
-  Timer? checkNetWorkStatus;
+  late Timer timerPing;
+  // late Timer timerCheck;
+  // Timer? timerLostMessage;
+  // Timer? checkNetWorkStatus;
   IMWebsocket imWebsocket = IMWebsocket();
   bool isFirst = true;
   String pingTime = "";
+  bool started = false;
 
   var subscription;
   String _stateText = "";//用来显示状态
@@ -59,37 +61,53 @@ class IMClientManager {
     connectToServer();
   }
 
+  // static const timecheck = Duration(seconds: 7);
+  // void checkTimer(){
+  //   timerCheck = Timer.periodic(timecheck, (timer) {
+  //     if(!timerPing.isActive){
+  //       Logger.info("------Resetting timerPing-----");
+  //       startPing();
+  //     }
+  //   });
+  //
+  // }
+
   ///ping
   static const timeping = Duration(seconds: 5);
   void startPing(){
     timerPing = Timer.periodic(timeping, (timer) {
-      if(imWebsocket.isLogin) {
+      if(imWebsocket.isLogin && started) {
         imWebsocket.sendMessage(createPingString());
+      }else{
+        if(started){
+          Logger.info("------进入重连-----");
+          connectToServer();
+        }
       }
     });
   }
 
-  ///每10秒检查是否有发送失败的消息，可以重发
-  static const timeLoop = Duration(seconds: 10);
-  void startResendLostMessage() {
-    timerLostMessage = Timer.periodic(timeLoop, (timer) {
-      while(imWebsocket.isLogin && lostMessage.isNotEmpty){
-        sendMessage(lostMessage.last,0);
-        lostMessage.removeLast();
-      }
-    });
-  }
+  // ///每10秒检查是否有发送失败的消息，可以重发
+  // static const timeLoop = Duration(seconds: 10);
+  // void startResendLostMessage() {
+  //   timerLostMessage = Timer.periodic(timeLoop, (timer) {
+  //     while(imWebsocket.isLogin && lostMessage.isNotEmpty){
+  //       sendMessage(lostMessage.last,0);
+  //       lostMessage.removeLast();
+  //     }
+  //   });
+  // }
 
   /// Check IM Status
-  static const timeCheckNetWork = Duration(seconds: 6);
-  void startcCheckImStatus() {
-    checkNetWorkStatus = Timer.periodic(timeCheckNetWork, (timer) {
-      if(!imWebsocket.isLogin){
-        Logger.info("------进入重连-----");
-        connectToServer();
-      }
-    });
-  }
+  // static const timeCheckNetWork = Duration(seconds: 6);
+  // void startcCheckImStatus() {
+  //   checkNetWorkStatus = Timer.periodic(timeCheckNetWork, (timer) {
+  //     if(!imWebsocket.isLogin){
+  //       Logger.info("------进入重连-----");
+  //       connectToServer();
+  //     }
+  //   });
+  // }
 
   ///链接到服务器
   bool isStarting = false;
@@ -104,26 +122,28 @@ class IMClientManager {
         Future.delayed(const Duration(seconds: 2), () {
           imWebsocket.sendMessage(createLoginString());
           startPing();
-          startListenNetWorkStatus();
-          startResendLostMessage();
-          startcCheckImStatus();
-          isStarting = false;
+          // startListenNetWorkStatus();
+          // startResendLostMessage();
+          // startcCheckImStatus();
+          // startPing();
         });
       });
+      isStarting = false;
     }
   }
 
   ///停止Socket
   void stop() {
     try {
-      timerPing?.cancel();
-      checkNetWorkStatus?.cancel();
-      timerLostMessage?.cancel();
+      started = false;
+      // timerCheck.cancel();
+      timerPing.cancel();
+      // checkNetWorkStatus?.cancel();
+      // timerLostMessage?.cancel();
       imWebsocket.isLogin = false;
       imWebsocket.disconnect();
-      timerLostMessage = null;
-      timerPing = null;
-      checkNetWorkStatus = null;
+      // timerLostMessage = null;
+      // checkNetWorkStatus = null;
     }catch(e){
       eventBus?.emit("immessage",IMManagerSubject(e.toString(),"ERROR"));
     }
@@ -132,15 +152,16 @@ class IMClientManager {
   ///停止Socket
   void release() {
     try {
-      timerPing?.cancel();
-      checkNetWorkStatus?.cancel();
-      timerLostMessage?.cancel();
+      started = false;
+      // timerCheck.cancel();
+      timerPing.cancel();
+      // checkNetWorkStatus?.cancel();
+      // timerLostMessage?.cancel();
       imWebsocket.isLogin = false;
       imWebsocket.disconnect();
       subscription?.cancel();
-      timerLostMessage = null;
-      timerPing = null;
-      checkNetWorkStatus = null;
+      // timerLostMessage = null;
+      // checkNetWorkStatus = null;
       subscription = null;
     }catch(e){
       eventBus?.emit("immessage",IMManagerSubject(e.toString(),"ERROR"));
@@ -159,48 +180,49 @@ class IMClientManager {
     for(int i = 0;i < needacks.length;i++) {
       imWebsocket.ackmap[needacks[i]] = needacks[i];
     }
+    started = true;
   }
 
-  bool isfirst = true;
-  ///监听本机的网络状态
-  void startListenNetWorkStatus(){
-    if(isfirst) {
-      isfirst = false;
-      subscription = Connectivity()
-          .onConnectivityChanged
-          .listen((ConnectivityResult result) {
-        if (result == ConnectivityResult.wifi) {
-          _stateText = "当前处于wifi网络";
-          if (!isConnectedNetwork) {
-            connectToServer();
-            isConnectedNetwork = true;
-          }
-        } else if (result == ConnectivityResult.mobile) {
-          _stateText = "当前处于数据流量网络";
-          if (!isConnectedNetwork) {
-            connectToServer();
-            isConnectedNetwork = true;
-          }
-        } else if (result == ConnectivityResult.none) {
-          _stateText = "当前无网络连接";
-          isConnectedNetwork = false;
-        } else {
-          _stateText = "处于其他连接";
-          if (!isConnectedNetwork) {
-            connectToServer();
-            isConnectedNetwork = true;
-          }
-        }
-      });
-    }
-  }
+  // bool isfirst = true;
+  // ///监听本机的网络状态
+  // void startListenNetWorkStatus(){
+  //   if(isfirst) {
+  //     isfirst = false;
+  //     subscription = Connectivity()
+  //         .onConnectivityChanged
+  //         .listen((ConnectivityResult result) {
+  //       if (result == ConnectivityResult.wifi) {
+  //         _stateText = "当前处于wifi网络";
+  //         if (!isConnectedNetwork) {
+  //           connectToServer();
+  //           isConnectedNetwork = true;
+  //         }
+  //       } else if (result == ConnectivityResult.mobile) {
+  //         _stateText = "当前处于数据流量网络";
+  //         if (!isConnectedNetwork) {
+  //           connectToServer();
+  //           isConnectedNetwork = true;
+  //         }
+  //       } else if (result == ConnectivityResult.none) {
+  //         _stateText = "当前无网络连接";
+  //         isConnectedNetwork = false;
+  //       } else {
+  //         _stateText = "处于其他连接";
+  //         if (!isConnectedNetwork) {
+  //           connectToServer();
+  //           isConnectedNetwork = true;
+  //         }
+  //       }
+  //     });
+  //   }
+  // }
 
 
 
 
   ///构建登录
   String createLoginString(){
-    deviceId = TimeUtils.getTimeEpoch();
+    // deviceId = TimeUtils.getTimeEpoch();
     MessageBody messageBody = MessageBody();
     messageBody.eventId = "1000000";
     messageBody.fromUid = fromUid;
@@ -226,13 +248,16 @@ class IMClientManager {
   }
 
   ///发送消息 f == 0,不需要进入循环，直接丢弃
-  void sendMessage(String message,int f){
+  bool sendMessage(String message,int f){
+    bool isSend = false;
     if(imWebsocket.isLogin) {
-      imWebsocket.sendMessage(message);
+      isSend = imWebsocket.sendMessage(message);
     }else{//发送失败缓存起来
-      if(f == 1) {
-        lostMessage.add(message);
-      }
+      // if(f == 1) {
+      //   lostMessage.add(message);
+      // }
+      isSend = false;
     }
+    return isSend;
   }
 }

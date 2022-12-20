@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert' as convert;
+import 'package:web_socket_channel/html.dart';
 
 import '../utils/AESEncrypt.dart';
 import '../utils/TimeUtils.dart';
@@ -14,7 +15,7 @@ import 'MessageBody.dart';
 enum StatusEnum { connect, connecting, close, closing }
 
 class IMWebsocket {
-  WebSocketChannel? channel;
+  late WebSocketChannel channel;
   StatusEnum isConnect = StatusEnum.close; //默认为未连接
   String imAddress = "";
   String fromUid = "";
@@ -30,8 +31,9 @@ class IMWebsocket {
   Future connect() async {
     if (isConnect == StatusEnum.close) {
       isConnect = StatusEnum.connecting;
-      channel = IOWebSocketChannel.connect(Uri.parse(imAddress));
-      channel?.stream.listen(_onReceive, onDone: () {
+      // channel = IOWebSocketChannel.connect(Uri.parse(imAddress));
+      channel = HtmlWebSocketChannel.connect(Uri.parse(imAddress));
+      channel.stream.listen(_onReceive, onDone: () {
         isLogin = false;
       }, onError: (error) {
         isLogin = false;
