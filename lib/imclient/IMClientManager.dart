@@ -33,6 +33,7 @@ class IMClientManager with WidgetsBindingObserver{ //with WidgetsBindingObserver
   String token = "";
   String deviceId = "";
   String needACK = "";
+  String platform = "";
 
   List<String> lostMessage = [];
 
@@ -154,6 +155,7 @@ class IMClientManager with WidgetsBindingObserver{ //with WidgetsBindingObserver
     messageBody.fromUid = fromUid;
     messageBody.token = token;
     messageBody.deviceId = deviceId;
+    messageBody.dataBody = platform;
     messageBody.cTimest = TimeUtils.getTimeEpoch();
     String jsonStr = messageBody.toJSON();
     return jsonStr;
