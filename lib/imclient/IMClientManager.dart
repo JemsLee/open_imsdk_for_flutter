@@ -1,5 +1,6 @@
 
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import '../utils/event_bus.dart';
 import 'MessageBody.dart';
 import '../utils/AESEncrypt.dart';
@@ -7,14 +8,14 @@ import '../utils/Logger.dart';
 import '../utils/TimeUtils.dart';
 import 'IMWebsocket.dart';
 import 'IMManagerSubject.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+
 
 ///IMClientManager.dart
 ///Jem.Lee
 ///2022.7.3
 ///Version 1.0.0
 
-class IMClientManager {
+class IMClientManager with WidgetsBindingObserver{ //with WidgetsBindingObserver
 
   static final IMClientManager _singletonPattern = IMClientManager._internal();
 
@@ -32,24 +33,19 @@ class IMClientManager {
   String token = "";
   String deviceId = "";
   String needACK = "";
-  bool isLogin = false;
 
   List<String> lostMessage = [];
 
 
   String key = "";
-  late Timer timerPing;
-  // late Timer timerCheck;
-  // Timer? timerLostMessage;
-  // Timer? checkNetWorkStatus;
+  Timer? timerPing;
+  Timer? checkNetWorkStatus;
   IMWebsocket imWebsocket = IMWebsocket();
-  bool isFirst = true;
   String pingTime = "";
   bool started = false;
 
-  var subscription;
-  String _stateText = "";//用来显示状态
-  bool isConnectedNetwork = true;
+  bool isFirst = true;
+
 
 
   ///事件机制
@@ -58,77 +54,61 @@ class IMClientManager {
   ///ping
   ///reconnect
   void start() {
+
+    if(isFirst) {
+      isFirst = false;
+      _cancelTimer();
+      //////////////保活机制////////////////////////
+      //监听生命周期
+      WidgetsBinding.instance.addObserver(this);
+      //定时器
+      _initIMCheckTimer();
+    }
+
     connectToServer();
   }
 
-  // static const timecheck = Duration(seconds: 7);
-  // void checkTimer(){
-  //   timerCheck = Timer.periodic(timecheck, (timer) {
-  //     if(!timerPing.isActive){
-  //       Logger.info("------Resetting timerPing-----");
-  //       startPing();
-  //     }
-  //   });
-  //
-  // }
-
   ///ping
-  static const timeping = Duration(seconds: 5);
+  static const timeping = Duration(seconds: 7);
   void startPing(){
     timerPing = Timer.periodic(timeping, (timer) {
       if(imWebsocket.isLogin && started) {
         imWebsocket.sendMessage(createPingString());
-      }else{
-        if(started){
-          Logger.info("------进入重连-----");
+      }
+    });
+  }
+
+  /// Check IM Status
+  static const timeCheckNetWork = Duration(seconds: 3);
+  void startcCheckImStatus() {
+    checkNetWorkStatus = Timer.periodic(timeCheckNetWork, (timer) {
+      if(started) {
+        if (!imWebsocket.isLogin) {
+          Logger.info("------Manager进入重连-----");
           connectToServer();
         }
       }
     });
   }
 
-  // ///每10秒检查是否有发送失败的消息，可以重发
-  // static const timeLoop = Duration(seconds: 10);
-  // void startResendLostMessage() {
-  //   timerLostMessage = Timer.periodic(timeLoop, (timer) {
-  //     while(imWebsocket.isLogin && lostMessage.isNotEmpty){
-  //       sendMessage(lostMessage.last,0);
-  //       lostMessage.removeLast();
-  //     }
-  //   });
-  // }
-
-  /// Check IM Status
-  // static const timeCheckNetWork = Duration(seconds: 6);
-  // void startcCheckImStatus() {
-  //   checkNetWorkStatus = Timer.periodic(timeCheckNetWork, (timer) {
-  //     if(!imWebsocket.isLogin){
-  //       Logger.info("------进入重连-----");
-  //       connectToServer();
-  //     }
-  //   });
-  // }
-
   ///链接到服务器
   bool isStarting = false;
   void connectToServer(){
     if(!isStarting) {//去重
       isStarting = true;
-      Future.delayed(const Duration(seconds: 1), () {
+      Future.delayed(const Duration(milliseconds: 100), () {
         stop();
         init();
         imWebsocket.connect();
       }).then((onValue) {
-        Future.delayed(const Duration(seconds: 2), () {
-          imWebsocket.sendMessage(createLoginString());
+        Future.delayed(const Duration(milliseconds: 1000), () {
+          imWebsocket.loginToServer(createLoginString());
           startPing();
-          // startListenNetWorkStatus();
-          // startResendLostMessage();
-          // startcCheckImStatus();
-          // startPing();
+          isStarting = false;
+          startcCheckImStatus();
         });
       });
-      isStarting = false;
+
     }
   }
 
@@ -136,33 +116,13 @@ class IMClientManager {
   void stop() {
     try {
       started = false;
-      // timerCheck.cancel();
-      timerPing.cancel();
-      // checkNetWorkStatus?.cancel();
-      // timerLostMessage?.cancel();
+      timerPing?.cancel();
+      checkNetWorkStatus?.cancel();
       imWebsocket.isLogin = false;
+      imWebsocket.started = started;
       imWebsocket.disconnect();
-      // timerLostMessage = null;
-      // checkNetWorkStatus = null;
-    }catch(e){
-      eventBus?.emit("immessage",IMManagerSubject(e.toString(),"ERROR"));
-    }
-  }
-
-  ///停止Socket
-  void release() {
-    try {
-      started = false;
-      // timerCheck.cancel();
-      timerPing.cancel();
-      // checkNetWorkStatus?.cancel();
-      // timerLostMessage?.cancel();
-      imWebsocket.isLogin = false;
-      imWebsocket.disconnect();
-      subscription?.cancel();
-      // timerLostMessage = null;
-      // checkNetWorkStatus = null;
-      subscription = null;
+      checkNetWorkStatus = null;
+      timerPing = null;
     }catch(e){
       eventBus?.emit("immessage",IMManagerSubject(e.toString(),"ERROR"));
     }
@@ -173,52 +133,18 @@ class IMClientManager {
     imWebsocket = IMWebsocket();
     imWebsocket.imAddress = imIPAndPort;
     imWebsocket.fromUid = fromUid;
+    imWebsocket.started = started;
     key = AESEncrypt.createKey(fromUid);
     imWebsocket.eventBus = eventBus;
     imWebsocket.key = key;
+
     var needacks = needACK.split(",");
     for(int i = 0;i < needacks.length;i++) {
       imWebsocket.ackmap[needacks[i]] = needacks[i];
     }
     started = true;
+
   }
-
-  // bool isfirst = true;
-  // ///监听本机的网络状态
-  // void startListenNetWorkStatus(){
-  //   if(isfirst) {
-  //     isfirst = false;
-  //     subscription = Connectivity()
-  //         .onConnectivityChanged
-  //         .listen((ConnectivityResult result) {
-  //       if (result == ConnectivityResult.wifi) {
-  //         _stateText = "当前处于wifi网络";
-  //         if (!isConnectedNetwork) {
-  //           connectToServer();
-  //           isConnectedNetwork = true;
-  //         }
-  //       } else if (result == ConnectivityResult.mobile) {
-  //         _stateText = "当前处于数据流量网络";
-  //         if (!isConnectedNetwork) {
-  //           connectToServer();
-  //           isConnectedNetwork = true;
-  //         }
-  //       } else if (result == ConnectivityResult.none) {
-  //         _stateText = "当前无网络连接";
-  //         isConnectedNetwork = false;
-  //       } else {
-  //         _stateText = "处于其他连接";
-  //         if (!isConnectedNetwork) {
-  //           connectToServer();
-  //           isConnectedNetwork = true;
-  //         }
-  //       }
-  //     });
-  //   }
-  // }
-
-
-
 
   ///构建登录
   String createLoginString(){
@@ -249,15 +175,64 @@ class IMClientManager {
 
   ///发送消息 f == 0,不需要进入循环，直接丢弃
   bool sendMessage(String message,int f){
-    bool isSend = false;
-    if(imWebsocket.isLogin) {
-      isSend = imWebsocket.sendMessage(message);
-    }else{//发送失败缓存起来
-      // if(f == 1) {
-      //   lostMessage.add(message);
-      // }
-      isSend = false;
-    }
-    return isSend;
+    return imWebsocket.sendMessage(message);
   }
+
+
+
+////////////////////////////////////////IM保活机制开始//////////////////////////////////////////////////////
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    print("--" + state.toString());
+    switch (state) {
+      case AppLifecycleState.inactive: // 应用程序可见,不可操作。
+        print("应用程序可见,不可操作。");
+        break;
+      case AppLifecycleState.resumed: // 应用程序可见,可操作, 前台
+        print("应用程序可见,可操作, 前台。");
+        _initIMCheckTimer(); //创建并开启定时器
+        break;
+      case AppLifecycleState.paused: // 应用程序不可见，不可操作, 后台
+        print("应用程序不可见，不可操作, 后台。");
+        _cancelTimer(); //取消并销毁定时器
+        break;
+      case AppLifecycleState.detached: //  虽然还在运行，但已经没有任何存在的界面。
+        break;
+    }
+  }
+
+  ///dispose
+  @override
+  void dispose() {
+    //销毁监听生命周期
+    WidgetsBinding.instance.removeObserver(this);
+    //取消定时器
+    _cancelTimer();
+  }
+
+  //定时器
+  late Timer? _imCheckTimer;
+
+  ///定时器 - 1分钟
+  void _initIMCheckTimer() {
+    _imCheckTimer = Timer.periodic(const Duration(seconds: 7), (timer) {
+      if(!imWebsocket.isLogin && started){
+        print("重新初始化IM.........");
+        init();
+        start();
+      }
+    });
+  }
+
+  ///取消定时器
+  void _cancelTimer() {
+    try {
+      _imCheckTimer?.cancel();
+      _imCheckTimer = null;
+    }catch(e){print(e.toString());}
+  }
+
+////////////////////////////////////////IM保活机制结束//////////////////////////////////////////////////////
+
+
 }

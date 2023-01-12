@@ -1,6 +1,6 @@
 name: itimsdkflutter
-description: momo im client for flutter  support web.
-version: 0.2.1
+description: momo im client for flutter  support Web & Android & iOS
+version: 0.3.1
 homepage: https://github.com/JemsLee
 
 environment:
@@ -17,7 +17,7 @@ dependencies:
   encrypt: ^5.0.0
   flutter_aes_ecb_pkcs5: ^0.1.1
   #检测网络状态
-  connectivity_plus: ^2.2.1
+#  connectivity_plus: ^2.2.1
 
 
 dev_dependencies:

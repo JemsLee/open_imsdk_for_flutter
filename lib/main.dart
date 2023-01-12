@@ -82,6 +82,7 @@ class _MyHomePageState extends State<MyHomePage> {
     imclient.token = "123";
     imclient.deviceId = "1649303524433-44426425";
     imclient.needACK = "1000001,5000004,8000000";
+    imclient.platform = "h5"; //值 android,ios,h5
     imclient.init();
 
     connectToImServer();
@@ -95,9 +96,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void connectToImServer() async{
-    if (!imclient.isLogin) {
-        imclient.start();
-    }
+    imclient.start();
   }
 
   void setIMListenEvent(){

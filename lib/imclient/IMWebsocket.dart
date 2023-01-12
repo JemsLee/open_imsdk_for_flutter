@@ -1,16 +1,15 @@
 import 'dart:async';
-import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert' as convert;
-import 'package:web_socket_channel/html.dart';
 
+import '../utils/FlutterImSdk.dart'
+    if (dart.library.io) '../utils/FlutterImSdk.dart'
+    if (dart.library.html) '../utils/WebImSdk.dart' as platform;
 import '../utils/AESEncrypt.dart';
 import '../utils/TimeUtils.dart';
 import '../utils/event_bus.dart';
 import 'IMManagerSubject.dart';
 import 'MessageBody.dart';
-
-
 
 enum StatusEnum { connect, connecting, close, closing }
 
@@ -21,72 +20,87 @@ class IMWebsocket {
   String fromUid = "";
   bool isLogin = false;
   String key = "";
-  Map<String,String> ackmap = {};
-
+  bool started = false;
+  Map<String, String> ackmap = {};
 
   ///事件机制
-  IMEventBus? eventBus ;
+  IMEventBus? eventBus;
 
   ///链接服务器
   Future connect() async {
     if (isConnect == StatusEnum.close) {
-      isConnect = StatusEnum.connecting;
-      // channel = IOWebSocketChannel.connect(Uri.parse(imAddress));
-      channel = HtmlWebSocketChannel.connect(Uri.parse(imAddress));
-      channel.stream.listen(_onReceive, onDone: () {
+      channel = platform.FlutterImSdk().getChannel(imAddress);
+      channel.stream.listen((event) {
+        isConnect = StatusEnum.connect;
+        _onReceive(event);
+      }, //监听服务器消息
+          onError: (error) {
         isLogin = false;
-      }, onError: (error) {
+        print("onError---${error.toString()}");
+        eventBus?.emit("immessage", IMManagerSubject(error.toString(), "ERROR"));
+      }, //连接错误时调用
+          onDone: () {
         isLogin = false;
-        eventBus?.emit("immessage",IMManagerSubject(error.toString(),"ERROR"));
-      }, cancelOnError: true);
-      isConnect = StatusEnum.connect;
+        print("onDone.................");
+      }, //关闭时调用
+          cancelOnError: true //设置错误时取消订阅
+      );
+
       return true;
     }
   }
 
   ///关闭链接
   Future disconnect() async {
-    if (isConnect == StatusEnum.connect) {
+    try {
       isConnect = StatusEnum.closing;
+      started = false;
       await channel?.sink.close(3000, "客户端主动关闭");
       isConnect = StatusEnum.close;
-    }
+    }catch(e){}
   }
 
   ///发送数据给服务器
   bool sendMessage(String text) {
-    if (isConnect == StatusEnum.connect) {
+    if (isLogin) {
       channel?.sink.add(text);
       return true;
     }
     return false;
   }
 
+  ///登录
+  bool loginToServer(String text) {
+    try {
+      channel?.sink.add(text);
+    }catch(e){print(e.toString());}
+    return true;
+  }
+
   ///处理收到的消息
   void _onReceive(message) {
-
-    bool isJsonFormat = false;
+    bool isJSONFormat = false;
     Map<String, dynamic> data = {};
     try {
       data = convert.jsonDecode(message);
-      isJsonFormat = true;
+      isJSONFormat = true;
     } catch (_) {}
-    if(isJsonFormat){
-      if(data["resDesc"] == "登录成功"){
+    if (isJSONFormat) {
+      if (data["resDesc"] == "登录成功") {
         isLogin = true;
-      }else{
+      } else {
         isLogin = false;
       }
-      eventBus?.emit("immessage",IMManagerSubject(message,"OK"));
-    }else{
-      String decString = AESEncrypt.aesDecrypted(message,key);
-      eventBus?.emit("immessage",IMManagerSubject(decString,"OK"));
+      eventBus?.emit("immessage", IMManagerSubject(message, "OK"));
+    } else {
+      String decString = AESEncrypt.aesDecrypted(message, key);
+      eventBus?.emit("immessage", IMManagerSubject(decString, "OK"));
       data = convert.jsonDecode(decString);
-      if(data["eventId"] == "3000001"){
+      if (data["eventId"] == "3000001") {
         isLogin = false;
         disconnect();
       }
-      if(ackmap[data["eventId"]] != null){
+      if (ackmap[data["eventId"]] != null) {
         sendMessage(createACKString(data["sTimest"]));
       }
     }
@@ -103,7 +117,7 @@ class IMWebsocket {
     messageBody.isCache = "0";
     messageBody.mType = "1";
     String jsonStr = messageBody.toJSON();
-    jsonStr = AESEncrypt.aesEncoded(jsonStr,key);
+    jsonStr = AESEncrypt.aesEncoded(jsonStr, key);
     return jsonStr;
   }
 }
