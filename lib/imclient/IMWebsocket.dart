@@ -109,7 +109,7 @@ class IMWebsocket {
   ///构建ACK
   String createACKString(String sTimest) {
     MessageBody messageBody = MessageBody();
-    messageBody.eventId = "1000001";
+    messageBody.eventId = "1000002";
     messageBody.fromUid = fromUid;
     messageBody.isAck = "1";
     messageBody.sTimest = sTimest;

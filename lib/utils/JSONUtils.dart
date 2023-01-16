@@ -28,9 +28,8 @@ class JSONUtils{
     map["isCache"] = messageBody.isCache;
     map["deviceId"] = messageBody.deviceId;
     map["oldChannelId"] = messageBody.oldChannelId;
-    map["isRobot"] = messageBody.isRobot;
+    map["isRoot"] = messageBody.isRoot;
 
-    map["nikeName"] = messageBody.nikeName;
     map["fbFlag"] = messageBody.fbFlag;
 
     String jsonString = convert.jsonEncode(map);

@@ -24,9 +24,7 @@ class MessageBody {
   String isCache = "1";//是否需要存离线 1-需要，0-不需要
   String deviceId = "";//唯一设备id，目前用AFID作为标识，登录时带入
   String oldChannelId = "";//准备离线的channel
-  String isRobot = "0";//是否机器人 1-机器人
-
-  String nikeName = "";
+  String isRoot = "0";//是否机器人 1-机器人
 
   String fbFlag = "";//分包的标记 VI100000
 
@@ -54,9 +52,8 @@ class MessageBody {
     map["isCache"] = isCache;
     map["deviceId"] = deviceId;
     map["oldChannelId"] = oldChannelId;
-    map["isRobot"] = isRobot;
+    map["isRoot"] = isRoot;
 
-    map["nikeName"] = nikeName;
     map["fbFlag"] = fbFlag;
     String jsonString = convert.jsonEncode(map);
     return jsonString;
